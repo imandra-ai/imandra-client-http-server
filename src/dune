@@ -1,0 +1,13 @@
+(executable
+ (name imandra_client_http_server)
+ (package imandra-client-http-server)
+ (public_name imandra_client_http_server)
+ (modules imandra_client_http_server api spec)
+ (modes byte)
+ (libraries imandra-client.lib cohttp-lwt-unix base64 decoders-yojson)
+ (flags (:standard -w +a-4-29-42-44-48-50-58-32-60@8 -safe-string)))
+
+(rule
+  (targets spec.ml)
+  (deps swagger.yaml ./tools/mk_spec.bc)
+  (action (with-stdout-to %{targets} (run ./tools/mk_spec.bc swagger.yaml))))
