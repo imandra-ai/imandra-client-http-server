@@ -169,6 +169,19 @@ let map_hint (h : Api.Request.Hints.t) =
           Imandra_surface.Hints.Method.Induct (map_induct i) ))
 
 
+let example_type =
+  {s|
+  type example =
+    { x : string
+    ; y : int
+    ; z : bool
+    }
+
+  let example_to_json (t: example) =
+    `Assoc [ ("x", `String t.x); ("y", `Int (Z.to_int t.y)); ("z", `Bool t.z) ] [@@program]
+|s}
+
+
 let handle method_ path body =
   let open Api.Request in
   match (method_, path) with
@@ -259,6 +272,61 @@ let handle method_ path body =
           with
           | e ->
               error_response e)
+  | `OPTIONS, "/decompose/by-src/instances" ->
+      ok_response (`Assoc [ ("ok", `String "ok") ])
+  | `POST, "/decompose/by-src/instances" ->
+      with_decoded_json
+        D.Request.decompose_req_src
+        body
+        (fun (req_src : Api.Request.decompose_req_src) ->
+          let src = Base64.decode_exn req_src.src_base64 in
+          let s = Imandra_util.Util.gensym () in
+          let _ = LI.eval_string (Printf.sprintf "%s" example_type) in
+          print_endline example_type ;
+          let _ = LI.eval_string (Printf.sprintf "let %s = %s" s src) in
+          print_endline src ;
+          flush_all () ;
+          let _ =
+            LI.eval_string
+              (Printf.sprintf
+                 "let regions = Imandra_interactive.Decompose.top %S \
+                  [@@program]"
+                 s)
+          in
+          flush_all () ;
+          let _ =
+            LI.eval_string
+              (Printf.sprintf
+                 "Extract.eval \
+                  ~signature:(Imandra_surface.Event.DB.fun_id_of_str %S) () \
+                  [@@program]"
+                 s)
+          in
+          flush_all () ;
+
+          let _ =
+            LI.eval_string
+              "regions |> List.map (fun region -> Decompose.get_model region \
+               |> Mex.of_model) [@@program]"
+          in
+          flush_all () ;
+
+          let _ =
+            LI.eval_string
+              "let strings = regions |> List.map (fun region -> \
+               Decompose.get_model region |> Mex.of_model |> (fun x -> \
+               example_to_json x.Mex.x |> Yojson.Basic.to_string)) [@@program]"
+          in
+          let s =
+            LI.eval_string_returning_string "strings |> String.concat \", \" "
+          in
+          flush_all () ;
+
+          ok_response
+            (`Assoc
+              [ ( "region_instances"
+                , Yojson.Basic.from_string (Printf.sprintf "[%s]" s) )
+              ]))
   | `POST, "/reset" ->
       L.System.reset () ;
       ok_response (`Assoc [])

@@ -74,6 +74,17 @@ module Request = struct
     { syntax : src_syntax
     ; src_base64 : string
     }
+
+  type decompose_req_src =
+    { syntax : src_syntax
+    ; src_base64 : string
+    }
+
+  type decompose_instances_req_src =
+    { syntax : src_syntax
+    ; src_base64 : string
+    ; instance_printer : printer_details option
+    }
 end
 
 module Response = struct
@@ -260,7 +271,16 @@ module Decoders (D : Decoders.Decode.S) = struct
       field "syntax" src_syntax
       >>= fun syntax ->
       field "src_base64" string
-      >>= fun src_base64 -> succeed Request.{ syntax; src_base64 }
+      >>= fun src_base64 ->
+      succeed ({ Request.syntax; src_base64 } : Request.eval_req_src)
+
+
+    let decompose_req_src : Request.decompose_req_src decoder =
+      field "syntax" src_syntax
+      >>= fun syntax ->
+      field "src_base64" string
+      >>= fun src_base64 ->
+      succeed ({ Request.syntax; src_base64 } : Request.decompose_req_src)
   end
 
   module Response = struct
@@ -457,6 +477,11 @@ module Encoders (E : D.Encode.S) = struct
 
 
     let eval_req_src (x : Request.eval_req_src) =
+      obj
+        [ ("syntax", src_syntax x.syntax); ("src_base64", string x.src_base64) ]
+
+
+    let decompose_req_src (x : Request.decompose_req_src) =
       obj
         [ ("syntax", src_syntax x.syntax); ("src_base64", string x.src_base64) ]
   end
