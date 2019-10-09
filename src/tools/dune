@@ -1,4 +1,5 @@
-
 (executable
-  (name mk_spec) (modes byte) (modules mk_spec) (libraries containers))
-
+ (name mk_spec)
+ (modes byte)
+ (modules mk_spec)
+ (libraries containers))
