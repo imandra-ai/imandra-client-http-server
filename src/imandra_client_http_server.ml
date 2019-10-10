@@ -3,8 +3,8 @@ open Cohttp
 open Cohttp_lwt_unix
 module L = Imandra_client_lib
 module LI = Imandra_client_lib.Imandra
-module D = Api.Decoders (Decoders_yojson.Basic.Decode)
-module E = Api.Encoders (Decoders_yojson.Basic.Encode)
+module D = Api.Decoders (Decoders_yojson.Safe.Decode)
+module E = Api.Encoders (Decoders_yojson.Safe.Encode)
 
 let logic_eval_result ~(src_syntax : Api.src_syntax) src =
   let open Api in
@@ -116,17 +116,17 @@ let bad_request (error_msg : string) =
   let open Api.Response in
   let body =
     { error = error_msg }
-    |> Decoders_yojson.Basic.Encode.encode_string E.Response.error_response
+    |> Decoders_yojson.Safe.Encode.encode_string E.Response.error_response
   in
   Server.respond_string ~status:`Bad_request ~body ()
 
 
 let with_decoded_json decoder json_str f =
   let parsed =
-    Decoders_yojson.Basic.Decode.decode_string decoder json_str
+    Decoders_yojson.Safe.Decode.decode_string decoder json_str
     |> CCResult.map_err (fun e ->
            bad_request
-             (CCFormat.asprintf "%a" Decoders_yojson.Basic.Decode.pp_error e))
+             (CCFormat.asprintf "%a" Decoders_yojson.Safe.Decode.pp_error e))
   in
   match parsed |> CCResult.map f with Ok r -> r | Error r -> r
 
@@ -136,13 +136,13 @@ let error_response e =
     let open Api.Response in
     let s = CCFormat.asprintf "%a" pp_exn e in
     { error = s }
-    |> Decoders_yojson.Basic.Encode.encode_string E.Response.error_response
+    |> Decoders_yojson.Safe.Encode.encode_string E.Response.error_response
   in
   Server.respond_string ~status:`Unprocessable_entity ~body ()
 
 
 let ok_response json =
-  Server.respond_string ~status:`OK ~body:(Yojson.Basic.to_string json) ()
+  Server.respond_string ~status:`OK ~body:(Yojson.Safe.to_string json) ()
 
 
 let map_induct = function
@@ -167,19 +167,6 @@ let map_hint (h : Api.Request.Hints.t) =
           Imandra_surface.Hints.Method.Auto
       | Api.Request.Hints.Method.(Induct i) ->
           Imandra_surface.Hints.Method.Induct (map_induct i) ))
-
-
-let example_type =
-  {s|
-  type example =
-    { x : string
-    ; y : int
-    ; z : bool
-    }
-
-  let example_to_json (t: example) =
-    `Assoc [ ("x", `String t.x); ("y", `Int (Z.to_int t.y)); ("z", `Bool t.z) ] [@@program]
-|s}
 
 
 let handle method_ path body =
@@ -280,52 +267,65 @@ let handle method_ path body =
         body
         (fun (req_src : Api.Request.decompose_req_src) ->
           let src = Base64.decode_exn req_src.src_base64 in
-          let s = Imandra_util.Util.gensym () in
-          let _ = LI.eval_string (Printf.sprintf "%s" example_type) in
-          print_endline example_type ;
-          let _ = LI.eval_string (Printf.sprintf "let %s = %s" s src) in
           print_endline src ;
+          let _ = LI.eval_string (Printf.sprintf "%s" src) in
           flush_all () ;
+
+          let _ =
+            LI.eval_string
+              (Printf.sprintf
+                 "let details = Event.DB.find_fun_by_name %S [@@program]"
+                 "main")
+          in
+          flush_all () ;
+
           let _ =
             LI.eval_string
               (Printf.sprintf
                  "let regions = Imandra_interactive.Decompose.top %S \
                   [@@program]"
-                 s)
+                 "main")
           in
           flush_all () ;
+
           let _ =
             LI.eval_string
               (Printf.sprintf
-                 "Extract.eval \
-                  ~signature:(Imandra_surface.Event.DB.fun_id_of_str %S) () \
+                 "Extract.eval ~signature:(Event.DB.fun_id_of_str %S) () \
                   [@@program]"
-                 s)
+                 "main")
           in
           flush_all () ;
-
-          let _ =
-            LI.eval_string
-              "regions |> List.map (fun region -> Decompose.get_model region \
-               |> Mex.of_model) [@@program]"
+          let genny =
+            "let arg_types = details.f_args |> List.map (fun arg -> (Var.name \
+             arg, Type.to_string (Var.ty arg))) in\n\
+            \                 let args_jsons = arg_types |> List.map (fun (v, \
+             t) -> Printf.sprintf \"(%S, to_yojson_%s model.Mex.%s)\" v t v) \
+             in\n\
+            \                             let args_json = (Printf.sprintf \
+             \"`Assoc [%s]\" (String.concat \", \" args_jsons)) in\n\n\
+             let _ = print_endline args_json in\n\
+            \             Imandra.eval_string (Printf.sprintf \"let \
+             model_to_json model = %s [@@program]\" args_json) "
           in
+          print_endline genny ;
+          let _ = LI.eval_string genny in
           flush_all () ;
 
+          print_endline "genned" ;
           let _ =
             LI.eval_string
-              "let strings = regions |> List.map (fun region -> \
-               Decompose.get_model region |> Mex.of_model |> (fun x -> \
-               example_to_json x.Mex.x |> Yojson.Basic.to_string)) [@@program]"
+              "let out_str = `List (regions |> List.map (fun region -> \
+               Decompose.get_model region |> Mex.of_model |> model_to_json)) \
+               |> Yojson.Safe.to_string [@@program]"
           in
-          let s =
-            LI.eval_string_returning_string "strings |> String.concat \", \" "
-          in
+          let s = LI.eval_string_returning_string "out_str" in
           flush_all () ;
 
           ok_response
             (`Assoc
               [ ( "region_instances"
-                , Yojson.Basic.from_string (Printf.sprintf "[%s]" s) )
+                , Yojson.Safe.from_string (Printf.sprintf "%s" s) )
               ]))
   | `POST, "/reset" ->
       L.System.reset () ;
@@ -418,7 +418,9 @@ let () =
   in
   Imandra_syntax.Syntax.set syntax ;
   Imandra_util.Pconfig.State.Set.print_banner false ;
+  Imandra_util.Pconfig.State.Set.redef true ;
   List.iter Imandra_interactive.Pconfig_io.add_to_load_path !dirs ;
   Imandra_client_lib.Client.with_server ~server_name:!server_name (fun () ->
       LI.do_init ~linenoise:false ~syntax () ;
+      Imandra_interactive.Imandra.add_plugin_yojson () ;
       Lwt_main.run (http_server !port))

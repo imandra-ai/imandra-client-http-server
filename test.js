@@ -5,7 +5,7 @@ let url = "http://localhost:3000/decompose/by-src/instances";
 function dosubmit (e) {
     e.preventDefault();
 
-    let contents = "fun (x : example) -> " + document.getElementById('program').value;
+    let contents = document.getElementById('program').value;
 
     let req = JSON.stringify({ src_base64: btoa(contents), syntax: "iml" });
 

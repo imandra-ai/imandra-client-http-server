@@ -1,13 +1,10 @@
 <h2>Your test program</h2>
 <form id="form">
-
-    <div style="margin-bottom: 20px">
-        type example = { x : string; y : int; z : bool }
-    </div>
-
     <div style="display: flex; flex-direction: column">
-    <span>fun (x : example) -></span>
     <textarea id="program"" rows=25 cols=100>
+    type t = { x : string; y : int; z : bool };
+
+    let main (x : t) =
       if x.z then
         if x.y > 10 && x.x = "hello" then
            1
@@ -15,12 +12,12 @@
            2
         else
            3
-     else
-       if x.y < 99 then
+      else
+        if x.y < 99 then
            4
-       else if x.x = "wowza" then
+        else if x.x = "wowza" then
            5
-       else
+        else
            6
     </textarea>
     </div>
