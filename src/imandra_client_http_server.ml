@@ -259,15 +259,12 @@ let handle method_ path body =
           with
           | e ->
               error_response e)
-  | `OPTIONS, "/decompose/by-src/instances" ->
-      ok_response (`Assoc [ ("ok", `String "ok") ])
   | `POST, "/decompose/by-src/instances" ->
       with_decoded_json
         D.Request.decompose_req_src
         body
         (fun (req_src : Api.Request.decompose_req_src) ->
           let src = Base64.decode_exn req_src.src_base64 in
-          print_endline src ;
           let _ = LI.eval_string (Printf.sprintf "%s" src) in
           flush_all () ;
 
@@ -296,28 +293,36 @@ let handle method_ path body =
                  "main")
           in
           flush_all () ;
-          let genny =
-            "let arg_types = details.f_args |> List.map (fun arg -> (Var.name \
-             arg, Type.to_string (Var.ty arg))) in\n\
-            \                 let args_jsons = arg_types |> List.map (fun (v, \
-             t) -> Printf.sprintf \"(%S, to_yojson_%s model.Mex.%s)\" v t v) \
-             in\n\
-            \                             let args_json = (Printf.sprintf \
-             \"`Assoc [%s]\" (String.concat \", \" args_jsons)) in\n\n\
-             let _ = print_endline args_json in\n\
-            \             Imandra.eval_string (Printf.sprintf \"let \
-             model_to_json model = %s [@@program]\" args_json) "
+          let def_model_to_json =
+            {s|
+let arg_types =
+  details.f_args
+  |> List.map (fun arg -> (Var.name arg, Type.to_string (Var.ty arg)))
+in
+let args_jsons =
+  arg_types
+  |> List.map (fun (v, t) -> Printf.sprintf "(%S, to_yojson_%s model.Mex.%s)" v t v)
+in
+let args_json =
+  (Printf.sprintf "`Assoc [%s]" (String.concat "; " args_jsons))
+in
+Imandra.eval_string
+  (Printf.sprintf "let model_to_json model = %s [@@program]" args_json)
+|s}
           in
-          print_endline genny ;
-          let _ = LI.eval_string genny in
+          let _ = LI.eval_string def_model_to_json in
           flush_all () ;
 
-          print_endline "genned" ;
           let _ =
             LI.eval_string
-              "let out_str = `List (regions |> List.map (fun region -> \
-               Decompose.get_model region |> Mex.of_model |> model_to_json)) \
-               |> Yojson.Safe.to_string [@@program]"
+              {s|
+let out_str =
+  `List (
+    regions
+    |> List.map (fun region -> Decompose.get_model region |> Mex.of_model |> model_to_json)
+  )
+  |> Yojson.Safe.to_string [@@program]
+|s}
           in
           let s = LI.eval_string_returning_string "out_str" in
           flush_all () ;
