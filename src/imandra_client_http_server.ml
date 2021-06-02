@@ -149,6 +149,8 @@ let map_induct = function
   | Api.Request.Hints.Induct.Default ->
       Imandra_surface.Hints.Induct.Default
   | Api.Request.Hints.Induct.(Functional { f_name }) ->
+      let db = Imandra_surface.Event.State.get Imandra_interactive.Globals_.event_state_ in
+      let f_name = Some (Imandra_surface.Event.DB.fun_id_of_str db f_name) in
       Imandra_surface.Hints.Induct.(Functional { f_name })
   | Api.Request.Hints.Induct.(Structural { vars; style }) ->
       Imandra_surface.Hints.Induct.(Structural { vars; style })
