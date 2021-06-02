@@ -58,7 +58,7 @@ let transform_verify_result
                 ; type_ = "counterexample"
                 ; printed =
                     printer_details
-                    |> CCOpt.map (fun pd -> print_instance pd ())
+                    |> CCOpt.map (fun pd -> print_instance pd)
                 }
             }
     | V_unknown { reason; _ } ->
@@ -92,7 +92,7 @@ let transform_instance_result
                 ; type_ = "instance"
                 ; printed =
                     printer_details
-                    |> CCOpt.map (fun pd -> print_instance pd ())
+                    |> CCOpt.map (fun pd -> print_instance pd)
                 }
             }
     | I_unknown { reason; _ } ->
