@@ -280,6 +280,10 @@ let dirs = ref []
 
 let lock = ref ~-1
 
+let use_tcp = ref false
+
+let address = ref None
+
 let speclist =
   Arg.align
     [ ( "-server"
@@ -299,6 +303,8 @@ let speclist =
       , Arg.String (fun s -> dirs := s :: !dirs)
       , " add directory to load path" )
     ; ("-lockdown", Arg.Set_int lock, " lockdown mode to the given user id")
+    ; ("-address", Arg.String (fun s -> address := Some(s)), " Socket address used to communicate with the server")
+    ; ("-tcp", Arg.Set use_tcp, " Use tcp to communicate with server")
     ]
 
 
@@ -351,6 +357,9 @@ let () =
   Imandra_syntax.Syntax.set syntax ;
   Imandra_util.Pconfig.State.Set.print_banner false ;
   List.iter Imandra_interactive.Pconfig_io.add_to_load_path !dirs ;
-  Imandra_client_lib.Client.with_server ~server_name:!server_name (fun () ->
+  Imandra_client_lib.Client.with_server ~server_name:!server_name
+    ?address:!address
+    ~use_tcp:!use_tcp
+    (fun () ->
       LI.do_init ~linenoise:false ~syntax () ;
       Lwt_main.run (http_server !port))
