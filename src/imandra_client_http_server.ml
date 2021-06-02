@@ -192,7 +192,7 @@ let handle method_ path body =
       with_decoded_json D.Request.eval_req_src body (fun req_src ->
           let src = Base64.decode_exn req_src.src_base64 in
           let to_eval = Printf.sprintf "%s" src in
-          match logic_eval_result ~src_syntax:req_src.syntax to_eval () with
+          match logic_eval_result ~src_syntax:req_src.syntax to_eval with
           | Ok _ ->
               (* We throw the top result list away here as it's empty unless top
              result is turned on, and we have it turned off for efficiency. Better to
@@ -206,7 +206,7 @@ let handle method_ path body =
           let src = Base64.decode_exn req_src.src_base64 in
           let s = Imandra_util.Util.gensym () in
           let to_eval = Printf.sprintf "let %s = %s" s src in
-          match logic_eval_result ~src_syntax:req_src.syntax to_eval () with
+          match logic_eval_result ~src_syntax:req_src.syntax to_eval with
           | Error e ->
               error_response e
           | Ok _ ->
@@ -236,7 +236,7 @@ let handle method_ path body =
           let s = Imandra_util.Util.gensym () in
           let to_eval = Printf.sprintf "let %s = %s" s src in
           let hints = req_src.hints |> CCOpt.map (fun h -> map_hint h) in
-          match logic_eval_result ~src_syntax:req_src.syntax to_eval () with
+          match logic_eval_result ~src_syntax:req_src.syntax to_eval with
           | Error e ->
               error_response e
           | Ok _ ->
